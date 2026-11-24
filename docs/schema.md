@@ -46,10 +46,18 @@ Per zone and profile:
 - Lapsed customers count as 0.5 of an active customer in the numerator (configurable).
 
 ## Entity resolution order
-1. Exact on `google_place_id` / `osm_ref` / `registry_ref`.
-2. Exact `phone_e164` or `website_domain` **and** ≤ 300 m.
-3. `similarity(name_norm) ≥ 0.6` **and** ≤ 150 m → auto-merge if score ≥ 0.85, else `match_reviews`.
-4. Otherwise create a new account.
+Implemented in `backend/app/domain/entity_resolution.py` (pure) + `services/resolution.py` (DB).
+1. Exact on `google_place_id` / `osm_ref` / `registry_ref` / `external_crm_id` → link.
+2. Same `phone_e164` or `website_domain` and ≤ 300 m (or no coordinates but similar name) → link; same identifier but far apart or a dissimilar name → review (chains share numbers).
+3. `similarity(name_norm) ≥ 0.6` and ≤ 150 m → score; auto-link at ≥ 0.85, else `match_reviews`.
+4. No coordinates on either side (typical for invoices): exact normalised name and no conflicting identifier → link; near-identical name, or a conflicting phone/domain/ID → review.
+5. Two or more equally strong name-only matches → review, never a silent pick.
+6. Otherwise create a new account.
+
+A "review" outcome still creates the new account (nothing is lost); accepting the review merges it into the candidate, moving source records and orders, and marks it `merged`.
+
+## RLS for membership lookups
+Tenant tables match `workspace_id = app.workspace_id`. `workspaces` and `workspace_members` also admit rows for the authenticated user (`app.user_id`), so the API can list a user's workspaces before one is selected. Creating a workspace sets `app.workspace_id` to the new id first, so the `WITH CHECK` passes inside the same transaction.
 
 ## `DiscoveryProfileSpec` v1
 Pydantic model in `backend/app/profile/spec.py`; this JSON is the contract. Gemini fills it; validators check it; the user can edit it before activation.
@@ -128,4 +136,6 @@ Pydantic model in `backend/app/profile/spec.py`; this JSON is the contract. Gemi
   {"target": "attributes.segment", "source_columns": ["Cust Group"], "transform": "trim", "confidence": 0.6}
 ], "unmapped": ["Internal Code"]}
 ```
-Transforms are an enum: `trim`, `concat`, `split`, `parse_date`, `parse_amount`, `phone_e164`, `domain`, `lowercase`, `coalesce`. Gemini picks from them and never writes code.
+Transforms are an enum: `trim`, `concat`, `split_part`, `parse_date`, `parse_amount`, `phone_e164`, `domain`, `lowercase`, `coalesce`, `coordinate`. Gemini picks from them and never writes code. Each field also records `origin` (`reused`, `heuristic`, `llm`, `user`) and `confidence`; LLM confidence is capped at 0.9.
+
+Import statuses: `uploaded` → `mapping_proposed` → `mapping_confirmed` → `importing` → `succeeded` | `failed`. A CHECK blocks `importing`/`succeeded` without a confirmed mapping.

@@ -11,9 +11,9 @@ from sqlalchemy import text
 
 from app.adapters.storage import get_storage
 from app.api.deps import Ws
-from app.imports.mapping import ColumnMapping, MappingError, validate_mapping
+from app.imports.mapping import ColumnMapping, MappingError, apply_mapping, validate_mapping
 from app.imports.reader import UnreadableFile, header_fingerprint, read_table
-from app.imports.targets import ALLOWED_TRANSFORMS, REQUIRED, TARGETS, ImportKind
+from app.imports.targets import ALLOWED_TRANSFORMS, REQUIRED, TARGETS, ImportKind, resolve_target
 from app.services.mapping_proposer import propose_mapping
 from app.settings import get_settings
 from app.workers.dispatch import dispatch_import
@@ -171,6 +171,47 @@ async def confirm_mapping(ws: Ws, job_id: UUID, body: ColumnMapping) -> ImportJo
         {"m": body.model_dump_json(), "u": ws.user.id, "id": job_id},
     )
     return _out(await _get(ws, job_id))
+
+
+class PreviewRow(BaseModel):
+    values: dict[str, str]
+    errors: dict[str, str]
+
+
+class PreviewOut(BaseModel):
+    problems: list[str]
+    rows: list[PreviewRow]
+
+
+@router.post("/{job_id}/preview")
+async def preview_mapping(ws: Ws, job_id: UUID, body: ColumnMapping) -> PreviewOut:
+    """Apply a draft mapping to the sample rows so the user can see the result before confirming."""
+    job = await _get(ws, job_id)
+    problems: list[str] = []
+    try:
+        validate_mapping(job.kind, list(job.headers), body)
+    except MappingError as exc:
+        problems = exc.problems
+    region = (
+        (
+            await ws.session.execute(
+                text("SELECT default_phone_region FROM workspaces WHERE id = :w"), {"w": ws.workspace_id}
+            )
+        )
+        .scalar_one()
+        .strip()
+    )
+    known = {c for c in job.headers}
+    usable = ColumnMapping(
+        fields=[
+            f for f in body.fields if set(f.source_columns) <= known and resolve_target(job.kind, f.target)
+        ]
+    )
+    rows = []
+    for raw in job.sample_rows[:10]:
+        values, errors = apply_mapping(usable, raw, default_region=region)
+        rows.append(PreviewRow(values={k: str(v) for k, v in values.items()}, errors=errors))
+    return PreviewOut(problems=problems, rows=rows)
 
 
 @router.post("/{job_id}/run", status_code=status.HTTP_202_ACCEPTED)

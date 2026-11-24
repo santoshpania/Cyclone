@@ -1,0 +1,18 @@
+{
+  "_comment": "Mail-provider detection from MX hostnames (suffix match). Used by the Phase 3 DNS enricher. Not industry data.",
+  "providers": [
+    {"id": "google_workspace", "label": "Google Workspace", "mx_suffixes": ["google.com", "googlemail.com"]},
+    {"id": "microsoft_365", "label": "Microsoft 365", "mx_suffixes": ["mail.protection.outlook.com", "outlook.com"]},
+    {"id": "zoho", "label": "Zoho Mail", "mx_suffixes": ["zoho.com", "zoho.eu", "zoho.in", "zohomail.com"]},
+    {"id": "proton", "label": "Proton Mail", "mx_suffixes": ["protonmail.ch", "proton.me"]},
+    {"id": "yahoo", "label": "Yahoo Mail", "mx_suffixes": ["yahoodns.net"]},
+    {"id": "godaddy", "label": "GoDaddy", "mx_suffixes": ["secureserver.net"]},
+    {"id": "fastmail", "label": "Fastmail", "mx_suffixes": ["messagingengine.com"]},
+    {"id": "yandex", "label": "Yandex", "mx_suffixes": ["yandex.net", "yandex.ru"]},
+    {"id": "amazon_ses", "label": "Amazon SES / WorkMail", "mx_suffixes": ["amazonaws.com"]},
+    {"id": "mimecast", "label": "Mimecast (gateway)", "mx_suffixes": ["mimecast.com"]},
+    {"id": "proofpoint", "label": "Proofpoint (gateway)", "mx_suffixes": ["pphosted.com", "ppe-hosted.com"]},
+    {"id": "barracuda", "label": "Barracuda (gateway)", "mx_suffixes": ["barracudanetworks.com"]},
+    {"id": "cisco_ironport", "label": "Cisco Secure Email (gateway)", "mx_suffixes": ["iphmx.com"]}
+  ]
+}

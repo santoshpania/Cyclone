@@ -6,51 +6,61 @@ Each phase ends with **exit criteria**, and the next phase doesn't start until t
 
 ## Phase 1 — Foundation, schema, AI-assisted import
 
+Status: built on branch `phase-1/foundation`. Exit criteria met in the automated suite (see below). Open items are listed under **Carried over**.
+
 ### Scaffolding
-- [ ] Monorepo: `web/` (pnpm, Next.js App Router, TS strict, Tailwind, shadcn/ui) and `backend/` (uv, FastAPI, SQLAlchemy 2 async + asyncpg + GeoAlchemy2, Alembic, procrastinate)
-- [ ] `supabase/` local stack (`supabase start`); `.env.example`; `Makefile` (`dev`, `test`, `lint`, `osm-import`)
-- [ ] GitHub Actions CI: ruff, mypy, pytest (`not live`) against PostGIS, web typecheck/lint/test, OpenAPI client drift check, `check_no_industry_terms.sh`
+- [x] Monorepo: `web/` (pnpm, Next.js 16 App Router, TS strict, Tailwind v4, shadcn-style components written by hand — the shadcn registry wasn't reachable) and `backend/` (uv, FastAPI, SQLAlchemy 2 async Core + asyncpg, Alembic, procrastinate). *Changed:* no GeoAlchemy2/ORM models; PostGIS via explicit SQL.
+- [x] `.env.example`; `Makefile` (`db-up`, `db-migrate`, `api`, `worker`, `web`, `test`, `lint`, `gen-api`); `docker-compose.yml` with PostGIS. *Changed:* local DB is plain PostGIS via compose instead of `supabase start` (Supabase CLI couldn't be installed here); Supabase is used for Auth/Storage/production DB.
+- [x] GitHub Actions CI: ruff, ruff format, mypy, pytest against PostGIS service, web lint/typecheck/test/build, OpenAPI client drift check, `check_no_industry_terms.sh` *(workflow written; not yet run on GitHub)*
 - [ ] Structured logging with PII redaction; request IDs
 
 ### Auth & tenancy
-- [ ] Supabase Auth in `web/` (email + Google OAuth); FastAPI verifies the Supabase JWT via JWKS
-- [ ] `app_backend` DB role (not `service_role`); `db/session.py` runs `SET LOCAL app.workspace_id` per transaction
-- [ ] SECURITY DEFINER functions: `create_workspace()`, `my_workspaces()`
-- [ ] Workspace wizard step 1: company name, offerings, value proposition, languages (default en+ar), currency (AED)
+- [x] Supabase Auth in `web/` (email/password + Google OAuth, PKCE callback); FastAPI verifies the Supabase JWT via JWKS or the legacy HS256 secret. Dev-only bypass (`AUTH_DEV_BYPASS` + `NEXT_PUBLIC_AUTH_MODE=dev`), refused in production. *Not yet tested against a live Supabase project.*
+- [x] `app_backend` DB role (NOLOGIN in migration, NOBYPASSRLS, read-only on shared OSM tables); `tenant_session` sets `app.workspace_id` / `app.user_id` per transaction
+- [x] ~~SECURITY DEFINER functions~~ *Replaced:* RLS policies on `workspaces`/`workspace_members` also admit the authenticated user's rows; workspace creation sets `app.workspace_id` to the new id in the same transaction. No definer functions needed.
+- [x] Workspace wizard step 1: company name, offerings, value proposition, languages (default en+ar), currency (AED), phone region
 
 ### Schema
-- [ ] Alembic `0001` from `docs/schema.sql` (+ FK `workspace_members.user_id → auth.users`)
-- [ ] Guard tests: RLS isolation (including unset setting), active-profile immutability, Places `expires_at` CHECK, mapping-required CHECK
-- [ ] Migration upgrade/downgrade test
+- [x] Alembic `0001` executes `migrations/sql/0001_init.sql` (`docs/schema.sql` is a symlink); `0002` app role + `auth.users` FK when present; `0003` job queue
+- [x] Guard tests: RLS isolation (including unset setting and cross-tenant writes), role cannot bypass RLS or write OSM tables, active-profile immutability, Places `expires_at` CHECK, mapping-required CHECK, budget exceeded before spend
+- [x] Migration upgrade/downgrade test
 
 ### Reference catalogs
-- [ ] `catalogs/places_types.json` (Places API Table A types) + refresh script
-- [ ] `catalogs/osm_taginfo.json` (keys/values with usage counts for POI keys) + refresh script
-- [ ] `catalogs/mx_providers.json`, `catalogs/tech_fingerprints.json` (seed; used in Phase 3)
+- [ ] `catalogs/places_types.json` — refresh script written (`backend/scripts/catalogs/refresh_places_types.py`); **not run**: developers.google.com unreachable from this environment. Needed before Phase 2 validators.
+- [ ] `catalogs/osm_taginfo.json` — refresh script written (`refresh_taginfo.py`); **not run**: taginfo.openstreetmap.org unreachable. Needed before Phase 2 validators.
+- [x] `catalogs/mx_providers.json`, `catalogs/tech_fingerprints.json` (seed; used in Phase 3)
+- [x] Added: `header_synonyms.json` (en + ar + common ERP labels), `legal_forms.json`, `public_mail_domains.json`
 
 ### Import & AI column mapper
-- [ ] Upload CSV/XLSX (≤50 MB) to Supabase Storage → `import_jobs` (headers, 20 sample rows, `header_fingerprint`)
-- [ ] Reuse: if a confirmed mapping exists for the same fingerprint, propose it directly (no LLM call)
-- [ ] Heuristic pass: header synonyms (en + ar) and value sniffing (phone, URL, date, amount, lat/lng)
-- [ ] Gemini pass for unresolved columns only → `{target, source_columns[], transform(enum), params, confidence}`; low confidence → flagged
-- [ ] Mapping review UI: column → target dropdowns, transform preview on sample rows, confirm
-- [ ] Normalisers: `name_norm` (case, punctuation, legal suffixes like LLC/FZE/FZCO/Est. as a catalog, Arabic diacritics), E.164 (`phonenumbers`, region AE), domain (`tldextract`), locale-aware dates and amounts
-- [ ] Row-level error report (CSV download) and import stats
+- [x] Upload CSV/XLSX (≤50 MB; encodings incl. cp1256 Arabic; delimiter sniffing; duplicate headers) to Storage (Supabase or local) → `import_jobs` (headers, 20 sample rows, `header_fingerprint`)
+- [x] Reuse: a confirmed mapping for the same fingerprint is proposed directly (no LLM call)
+- [x] Heuristic pass: header synonyms (en + ar) and value sniffing (phone, email, URL, date); date headers with non-date values are vetoed
+- [x] Gemini pass for unresolved columns only (structured output), metered via `UsageMeter`; invalid suggestions dropped, confidence capped at 0.9; sample values can be withheld (`LLM_SEND_SAMPLE_VALUES=false`). *Tested with FakeLLM only — no live Gemini call made yet.*
+- [x] Mapping review UI: per-column target + transform dropdowns, confidence/origin badges, live preview of transformed sample rows (server-side `POST …/preview`), confirm & import
+- [x] Normalisers: `name_norm` (case, punctuation, legal forms incl. Arabic ذ.م.م, diacritics/letter folding), E.164 (`phonenumbers`), domain (`tldextract`, offline snapshot; mailbox domains ignored), day-first dates + Excel serials, amounts (currency symbols, Arabic-Indic digits, decimal comma)
+- [x] Row-level error report (CSV with BOM for Excel/Arabic) and import stats
 
 ### Geocoding & entity resolution
-- [ ] Geocoder adapter: primary provider whose terms allow permanent storage; Google Geocoding fallback with TTL; store `geocode.precision`; batch + cache
-- [ ] Accept lat/lng columns directly when present (common in UAE ERPs and field apps)
-- [ ] Entity resolution v1 (rules in `docs/schema.md`): exact IDs → phone/domain + ≤300 m → trigram ≥0.6 + ≤150 m → auto-merge ≥0.85, else `match_reviews`
-- [ ] Match review UI (accept/reject, side by side)
+- [x] Geocoder chain: OpenCage (permanent storage) → Google fallback with 30-day `storable_until`; precision stored; per-run cache; metered. *Only exercised with mocked HTTP.*
+- [x] Accept lat/lng columns directly when present
+- [x] Entity resolution v1 (rules in `docs/schema.md`), plus name-only matching for records without coordinates (invoices) and an ambiguity guard
+- [x] Match review UI (side by side, accept = merge, reject = keep both)
 
 ### Sales history
-- [ ] Orders import (same mapper, `kind=orders`); creates or links accounts by customer key
-- [ ] Rollups: `last_order_at`, `order_count`, `lifetime_value`; status `customer` vs `lapsed_customer` (`settings.lapsed_after_months`, default 12)
+- [x] Orders import (same mapper, `kind=orders`); links by customer ID or name, creates accounts for unknown customers
+- [x] Rollups: `last_order_at`, `order_count`, `lifetime_value`; `customer` vs `lapsed_customer` (`settings.lapsed_after_months`, default 12)
 
 **Exit criteria**
-- Two differently shaped exports (e.g. a Tally-style and a Zoho/Odoo-style customer list, plus one invoice export) import with ≥95% of rows mapped and no manual reformatting
-- Planted duplicates are surfaced (auto-merged or queued)
-- All guard tests pass in CI
+- [x] Two differently shaped exports (Tally-style CSV, Odoo-style XLSX) plus a Zoho-style invoice export import with ≥95% of rows mapped and no manual reformatting (`test_phase1_exit_criteria`)
+- [x] Planted duplicates are auto-linked or queued for review; no duplicate accounts created
+- [x] All guard tests pass (backend: 90 tests against PostGIS; web: unit tests, lint, typecheck, production build; browser smoke test of the full import flow through the real queue worker)
+
+### Carried over from Phase 1
+- [ ] Structured logging + request IDs
+- [ ] Run both catalog refresh scripts where the hosts are reachable, and commit the output
+- [ ] First live check against a real Supabase project (JWKS, Google OAuth redirect, Storage bucket) and a real Gemini key
+- [ ] Nightly purge of expired Google-provenance fields (needed once Google geocoding/Places data is stored — Phase 2)
+- [ ] Playwright e2e in CI (the smoke flow is in `web/e2e/import-smoke.mjs`; CI needs API + worker + web running)
 
 ---
 

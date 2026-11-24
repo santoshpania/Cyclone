@@ -1,0 +1,27 @@
+{
+  "_comment": "Website technology fingerprints (HTML substrings, header names/values). Used by the Phase 3 web enricher. Not industry data.",
+  "technologies": [
+    {"id": "wordpress", "label": "WordPress", "html": ["/wp-content/", "/wp-includes/"], "headers": {}},
+    {"id": "woocommerce", "label": "WooCommerce", "html": ["woocommerce"], "headers": {}},
+    {"id": "shopify", "label": "Shopify", "html": ["cdn.shopify.com", "Shopify.theme"], "headers": {"x-shopid": ""}},
+    {"id": "wix", "label": "Wix", "html": ["static.wixstatic.com", "wix-bolt"], "headers": {"x-wix-request-id": ""}},
+    {"id": "squarespace", "label": "Squarespace", "html": ["static1.squarespace.com"], "headers": {}},
+    {"id": "webflow", "label": "Webflow", "html": ["data-wf-site", "assets.website-files.com"], "headers": {}},
+    {"id": "magento", "label": "Magento", "html": ["Mage.Cookies", "/static/version"], "headers": {}},
+    {"id": "drupal", "label": "Drupal", "html": ["/sites/default/files/", "Drupal.settings"], "headers": {"x-drupal-cache": ""}},
+    {"id": "joomla", "label": "Joomla", "html": ["/media/jui/", "Joomla!"], "headers": {}},
+    {"id": "nextjs", "label": "Next.js", "html": ["/_next/static/"], "headers": {"x-powered-by": "Next.js"}},
+    {"id": "cloudflare", "label": "Cloudflare", "html": [], "headers": {"cf-ray": ""}},
+    {"id": "google_analytics", "label": "Google Analytics", "html": ["googletagmanager.com/gtag/js", "google-analytics.com/analytics.js"], "headers": {}},
+    {"id": "google_tag_manager", "label": "Google Tag Manager", "html": ["googletagmanager.com/gtm.js"], "headers": {}},
+    {"id": "meta_pixel", "label": "Meta Pixel", "html": ["connect.facebook.net/en_US/fbevents.js", "fbq('init'"], "headers": {}},
+    {"id": "linkedin_insight", "label": "LinkedIn Insight Tag", "html": ["snap.licdn.com"], "headers": {}},
+    {"id": "hubspot", "label": "HubSpot", "html": ["js.hs-scripts.com", "js.hsforms.net"], "headers": {}},
+    {"id": "zoho_salesiq", "label": "Zoho SalesIQ", "html": ["salesiq.zoho"], "headers": {}},
+    {"id": "intercom", "label": "Intercom", "html": ["widget.intercom.io"], "headers": {}},
+    {"id": "hotjar", "label": "Hotjar", "html": ["static.hotjar.com"], "headers": {}},
+    {"id": "whatsapp_widget", "label": "WhatsApp click-to-chat", "html": ["wa.me/", "api.whatsapp.com/send"], "headers": {}},
+    {"id": "recaptcha", "label": "Google reCAPTCHA", "html": ["www.google.com/recaptcha"], "headers": {}},
+    {"id": "stripe", "label": "Stripe", "html": ["js.stripe.com"], "headers": {}}
+  ]
+}

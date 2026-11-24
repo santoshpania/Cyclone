@@ -210,3 +210,19 @@ async def test_upload_rejects_unsupported_and_empty_files(alice: ApiUser) -> Non
         f"/workspaces/{ws}/imports", files={"file": ("x.csv", b"")}, data={"kind": "accounts"}
     )
     assert r.status_code == 422
+
+
+async def test_preview_applies_draft_mapping_to_samples(alice: ApiUser) -> None:
+    ws = await alice.create_workspace()
+    job = await alice.upload(ws, "inv.csv", fixture_bytes("zoho_invoices.csv"), "orders")
+    r = await alice.post(f"/workspaces/{ws}/imports/{job['id']}/preview", json=job["proposed_mapping"])
+    assert r.status_code == 200
+    body = r.json()
+    assert body["problems"] == []
+    first = body["rows"][0]["values"]
+    assert first["amount"] == "1250.00" and len(first["order_date"]) == 10  # ISO date
+    draft = {
+        "fields": [{"target": "amount", "source_columns": ["Customer Name"], "transform": "parse_amount"}]
+    }
+    body = (await alice.post(f"/workspaces/{ws}/imports/{job['id']}/preview", json=draft)).json()
+    assert body["problems"] and body["rows"][0]["errors"]["amount"]

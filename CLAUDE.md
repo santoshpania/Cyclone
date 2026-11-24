@@ -8,41 +8,46 @@ Read first: `PLAN.md` (roadmap), `docs/schema.sql` + `docs/schema.md` (data mode
 
 ## Repo layout
 ```
-web/                     Next.js App Router, TS strict, Tailwind, shadcn/ui, @vis.gl/react-google-maps, terra-draw
-  src/lib/api/           generated OpenAPI client (do not edit by hand)
+web/                       Next.js 16 App Router, TS strict, Tailwind v4, hand-written shadcn-style UI
+  AGENTS.md                Next.js 16 differs from older versions: read node_modules/next/dist/docs/ first
+  openapi.json             exported backend contract (generated; CI fails on drift)
+  src/lib/api/schema.d.ts  generated types (do not edit; `make gen-api`)
+  src/lib/auth.tsx         single module-level auth store (Supabase, or dev mode)
 backend/
-  app/api/               FastAPI routers (thin: auth, validation, enqueue)
-  app/domain/            pure logic: entity resolution, scoring, coverage, territory balancing (no I/O)
-  app/profile/           DiscoveryProfileSpec models, validators, compilers (OSM→SQL, Overpass QL fallback, Places queries)
-  app/profile/catalogs/  bundled reference data: Places types, OSM taginfo snapshot, MX providers, tech fingerprints
-  app/adapters/          the ONLY modules that do network I/O: osm, google_places, google_routes, registry,
-                         geocoding, dns, web, llm, storage
-  app/workers/           procrastinate tasks (Postgres-backed queue)
-  app/db/                SQLAlchemy 2 async models, session (sets app.workspace_id), Alembic migrations
-  tests/                 unit/, integration/, live/ (opt-in), fixtures/<provider>/
-docs/                    schema.sql, schema.md, adr/
-supabase/                local stack config (supabase start)
+  app/api/                 FastAPI routers (thin: auth, validation, enqueue)
+  app/domain/              pure logic: normalisers, entity resolution (later: scoring, coverage, balancing)
+  app/imports/             import pipeline pieces: reader, targets/transforms, heuristics, LLM mapper
+  app/services/            DB orchestration: import runner, resolution writes, rollups, reviews, UsageMeter
+  app/catalogs/            bundled reference data (header synonyms, legal forms, MX providers, tech
+                           fingerprints; Phase 2 adds Places types + OSM taginfo via scripts/catalogs/)
+  app/config/pricing.yaml  per-SKU cost estimates used by UsageMeter (verify before production)
+  app/adapters/            the ONLY modules that do network I/O: llm, geocoding, storage (later: osm,
+                           google_places, google_routes, dns, web)
+  app/workers/             procrastinate tasks (Postgres-backed queue) + dispatch
+  app/db/                  session (sets app.workspace_id / app.user_id), Alembic migrations;
+                           migrations/sql/0001_init.sql is the schema (docs/schema.sql symlinks to it)
+  scripts/                 dev_db.py, export_openapi.py, catalogs/refresh_*.py
+  tests/                   unit/, integration/ (real PostGIS), fixtures/imports/
+docs/                      schema.sql (symlink), schema.md, adr/
+docker-compose.yml         local PostGIS (Supabase in production)
 ```
 
 ## Commands
 ```bash
-supabase start                              # local Postgres+PostGIS, Auth, Storage
-make dev                                    # api + worker + web
-make test                                   # backend (not live) + web unit
-cd backend && uv run pytest -m "not live"   # backend tests
+make db-up && make db-migrate               # local PostGIS, migrations, enable app_backend login
+make api / make worker / make web           # API on :8000, queue worker, web on :3000
+make test                                   # backend (not live) + web unit tests
+make lint                                   # ruff, ruff format, mypy strict, eslint, tsc, industry-terms check
+make gen-api                                # regenerate web/openapi.json + typed client after API changes
 cd backend && uv run pytest -m live         # opt-in: real Gemini/Places, needs keys, costs money
-cd backend && uv run alembic upgrade head
-cd backend && uv run ruff check . && uv run mypy app
-pnpm -C web test && pnpm -C web typecheck && pnpm -C web lint
-pnpm -C web gen:api                         # regenerate client from backend OpenAPI; CI fails on drift
-make osm-import REGION=gcc-states           # Geofabrik extract → osm2pgsql → osm_features
 ```
+Local sign-in without Supabase: `AUTH_DEV_BYPASS=true` (backend, development only) + `NEXT_PUBLIC_AUTH_MODE=dev` (web).
 
 ## Non-negotiable architecture rules
-1. **Zero industry hardcoding.** No industry names, OSM tag values, Places types, keywords or pitch wording in `backend/app/` or `web/src/` outside `app/profile/catalogs/`. Industry examples belong only in `tests/fixtures/` and docs. CI runs `scripts/check_no_industry_terms.sh`.
-2. **The LLM composes, code executes.** Every Gemini output is parsed into a Pydantic model (structured output with a response schema), then validated against the catalogs. Never execute LLM-generated SQL, Overpass QL, regex or code. Queries are built only by `app/profile/compilers/`, with parameter binding.
+1. **Zero industry hardcoding.** No industry names, OSM tag values, Places types, keywords or pitch wording in `backend/app/` or `web/src/` outside `backend/app/catalogs/`. Industry examples belong only in `tests/fixtures/` and docs. CI runs `scripts/check_no_industry_terms.sh`.
+2. **The LLM composes, code executes.** Every Gemini output is parsed into a Pydantic model (structured output with a response schema), then validated against the catalogs. Never execute LLM-generated SQL, Overpass QL, regex or code. LLM confidence is capped below heuristic certainty and every AI mapping needs user confirmation. Queries are built only by code (Phase 2: `app/profile/compilers/`), with parameter binding.
 3. **Profiles are immutable once active.** Changes create a new version. Anything derived (scores, pitches, coverage, plans) stores the `profile_id` it was computed with.
-4. **Tenancy through RLS.** Every tenant table has `workspace_id`, and RLS is enabled and forced. The API connects as the `app_backend` role (never `service_role`) and runs `SET LOCAL app.workspace_id` in every transaction via `app/db/session.py`. Shared tables (`osm_*`, `provider_query_cache`) hold no tenant data.
+4. **Tenancy through RLS.** Every tenant table has `workspace_id`, and RLS is enabled and forced. The API connects as the `app_backend` role (never `service_role`) and sets `app.workspace_id` / `app.user_id` in every transaction via `app/db/session.py` (`tenant_session`). Shared tables (`osm_*`, `provider_query_cache`) hold no tenant data and `app_backend` cannot write the `osm_*` ones. Use SQLAlchemy Core with explicit SQL (`text()`); there are no ORM models.
 5. **Spatial conventions.** Store SRID 4326. Compute distances in metres with `::geography`. H3 is computed in Python (`h3`) and stored as `bigint`. Use `ST_DWithin` and never `ST_Distance < x` in WHERE clauses.
 6. **Provenance.** Raw source payloads go only to `source_records`. Any field written to `accounts` records its source (and expiry, if any) in `field_provenance`.
 7. **Layering.** `domain/` is pure and synchronous-testable. Adapters return typed DTOs. Routers never call adapters directly; long work is enqueued.
@@ -65,7 +70,7 @@ make osm-import REGION=gcc-states           # Geofabrik extract → osm2pgsql �
 - **Personal data (UAE PDPL / GDPR).** Sole-trader phones and emails count as personal data. `DELETE /accounts/{id}` must cascade through `source_records`, `enrichments` and `account_pitches`.
 
 ## Testing conventions
-- **Backend.** pytest + pytest-asyncio. DB tests run against real PostGIS (Testcontainers `postgis/postgis:16-3.4`, or the local Supabase DB in CI); never SQLite. Each test runs in a rolled-back transaction.
+- **Backend.** pytest + pytest-asyncio. DB tests run against real PostGIS (`CYCLONE_TEST_DATABASE_URL`, default `postgresql://postgres:postgres@127.0.0.1:5432/cyclone_test`; CI uses the `postgis/postgis:16-3.4` service); never SQLite. The suite recreates and migrates the test database once, connects the app as `app_backend` so RLS is live, and truncates tenant data after each test (imports span several transactions, so rollback-per-test can't isolate them). Jobs run inline (`RUN_TASKS_INLINE=true`).
 - **No network in tests.** `pytest-socket` blocks sockets by default. HTTP is mocked with `respx`, using recorded fixtures in `tests/fixtures/<provider>/`. Gemini goes through `FakeLLM`, which returns fixture JSON keyed by prompt name.
 - **Mandatory guard tests.** These must not be deleted:
   - A Places request without a field mask raises.
@@ -75,14 +80,16 @@ make osm-import REGION=gcc-states           # Geofabrik extract → osm2pgsql �
   - A cross-workspace read returns 0 rows under RLS, including when `app.workspace_id` is unset.
   - A google_places `source_record` without `expires_at` is rejected.
   - Updating an active profile fails.
+  - `app_backend` is not superuser, cannot bypass RLS, and cannot write shared OSM tables.
+  - An import cannot run without a confirmed column mapping.
 - **Golden ICP evals** (`-m live`, run before merging prompt changes). At least 5 unrelated ICPs (e.g. dental clinics, boutique hotels, warehouses, mid-market cybersecurity buyers, car workshops) must compile to valid specs with no validator errors. Snapshot diffs are reviewed by hand.
 - **Domain logic.** Table-driven unit tests for scoring (unknown vs false), entity resolution (near-duplicate fixtures in English and Arabic transliteration), coverage classification and territory balance.
 - **Migrations.** Each one has an upgrade/downgrade test against an empty DB.
-- **Web.** Vitest + React Testing Library for components; Playwright for import, configurator and map flows, with Google Maps mocked and `--trace off` by default. Typecheck and lint must be clean.
+- **Web.** Vitest + React Testing Library for components and pure helpers (e.g. `src/lib/mapping.ts`); Playwright for import, configurator and map flows, with Google Maps mocked and `--trace off` by default. Typecheck (`next typegen && tsc`), lint (React Compiler rules on) and `next build` must be clean.
 - **Coverage.** New code in `domain/` and `profile/` needs tests in the same PR.
 
 ## Conventions
-- Python 3.12, `uv`, ruff and mypy in strict mode for `app/`. TypeScript strict, no `any` in `src/lib`.
+- Python 3.12+, `uv`, ruff (format + lint) and mypy in strict mode for `app/`. The backend is an installable package (hatchling) so CLI entry points like the procrastinate worker can import `app`. TypeScript strict, no `any` in `src/lib`.
 - Commits: conventional commits (`feat:`, `fix:`, `chore:`…). One concern per PR.
 - Secrets only through env vars (`.env.example` lists names, never values). Never log API keys, phone numbers or emails at INFO.
 - Tick off `PLAN.md` checkboxes in the same PR that completes the item.
