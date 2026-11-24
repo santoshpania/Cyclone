@@ -1,5 +1,5 @@
 -- =====================================================================
--- Territory Copilot — PostgreSQL 16 + PostGIS schema (design v1)
+-- Cyclone — PostgreSQL 16 + PostGIS schema (design v1)
 -- Applied later as Alembic migration 0001. Target: Supabase Postgres.
 --
 -- Design rules (see docs/schema.md):

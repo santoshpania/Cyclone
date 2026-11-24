@@ -1,4 +1,6 @@
-# CLAUDE.md — Territory Copilot
+# CLAUDE.md — Cyclone
+
+**Cyclone** is the codename for this product. Use it for package names (`cyclone-web`, `cyclone-backend`), the DB name (`cyclone`) and service names.
 
 Industry-agnostic territory coverage, virgin-market discovery and sales copilot. A workspace describes its ICP in plain language. Gemini compiles that into a validated `DiscoveryProfileSpec`. Workers discover businesses (OSM extracts, Google Places, registry CSVs), enrich and score them, compare them with the customer base on a coverage map, and generate multi-day rep routes.
 

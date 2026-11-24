@@ -1,4 +1,4 @@
-# PLAN.md — Implementation roadmap
+# PLAN.md — Cyclone implementation roadmap
 
 Each phase ends with **exit criteria**, and the next phase doesn't start until they pass. Decisions: `docs/adr/0001-foundational-decisions.md`. Data model: `docs/schema.sql`.
 

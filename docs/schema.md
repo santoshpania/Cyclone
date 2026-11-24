@@ -1,4 +1,4 @@
-# Schema design notes
+# Cyclone — schema design notes
 
 Source of truth: [`schema.sql`](schema.sql) (becomes Alembic migration `0001`). This file explains *why*, and defines the JSONB contracts the SQL can't express.
 

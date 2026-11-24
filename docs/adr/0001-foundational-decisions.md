@@ -1,4 +1,4 @@
-# ADR 0001 — Foundational decisions
+# ADR 0001 — Cyclone foundational decisions
 
 Status: accepted · Date: 2026-11-23
 
