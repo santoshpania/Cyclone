@@ -1,0 +1,16 @@
+# Estimated USD cost per unit for every metered SKU. UsageMeter.reserve() uses these to enforce
+# workspace and run budgets BEFORE a call is made.
+#
+# These figures are planning estimates, NOT verified quotes. Re-check each one against the
+# provider's current price list before production and update `verified_at`. Prices changed in 2025.
+gemini:
+  flash_input_token:  {usd_per_unit: 0.0000003, verified_at: null, note: "per input token"}
+  flash_output_token: {usd_per_unit: 0.0000025, verified_at: null, note: "per output token"}
+geocoder:
+  opencage_request:   {usd_per_unit: 0.0005, verified_at: null, note: "per forward geocode; depends on plan"}
+  google_geocode:     {usd_per_unit: 0.005, verified_at: null, note: "Geocoding API, per request"}
+google_places:
+  text_search_ids_only: {usd_per_unit: 0.0, verified_at: null, note: "IDs-only field mask tier"}
+  place_details_contact: {usd_per_unit: 0.025, verified_at: null, note: "phone/website/rating tier"}
+google_routes:
+  compute_routes_optimized: {usd_per_unit: 0.015, verified_at: null, note: "optimizeWaypointOrder tier"}

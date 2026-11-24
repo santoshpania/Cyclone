@@ -1,0 +1,9 @@
+{
+  "_comment": "Mailbox providers: an email at these domains says nothing about the business's own website.",
+  "domains": [
+    "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "ymail.com", "hotmail.com", "hotmail.co.uk",
+    "outlook.com", "live.com", "msn.com", "icloud.com", "me.com", "mac.com", "aol.com", "proton.me",
+    "protonmail.com", "gmx.com", "gmx.net", "mail.com", "zoho.com", "zohomail.com", "yandex.com", "yandex.ru",
+    "emirates.net.ae", "eim.ae", "rediffmail.com", "qq.com", "163.com", "126.com"
+  ]
+}

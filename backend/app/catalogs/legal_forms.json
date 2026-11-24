@@ -1,0 +1,10 @@
+{
+  "_comment": "Company legal-form tokens stripped from names before matching. Normalised form (lowercase, dots removed). Not industry data.",
+  "suffixes": [
+    "llc", "l l c", "fze", "fzco", "fz llc", "fzllc", "fzc", "fz", "est", "establishment", "co", "company",
+    "ltd", "limited", "plc", "pllc", "inc", "incorporated", "corp", "corporation", "pjsc", "psc", "pvt", "pvt ltd",
+    "private limited", "gmbh", "sa", "sarl", "bv", "llp", "wll", "spc", "sole proprietorship", "branch",
+    "ذمم", "شذمم", "مم", "ش م ع", "شمع", "ذ م م", "ش ذ م م", "فرع"
+  ],
+  "prefixes": ["شركة", "مؤسسة", "the"]
+}
